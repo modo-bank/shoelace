@@ -11,6 +11,7 @@ import { waitForEvent } from '../../internal/event.js';
 import { watch } from '../../internal/watch.js';
 import componentStyles from '../../styles/component.styles.js';
 import formControlStyles from '../../styles/form-control.styles.js';
+import searchSelectStyles from './search-select.styles.js';
 import selectStyles from '../select/select.styles.js';
 import ShoelaceElement from '../../internal/shoelace-element.js';
 import SlIcon from '../icon/icon.component.js';
@@ -26,13 +27,15 @@ import type SlOption from '../option/option.component.js';
  * @dependency sl-icon
  * @dependency sl-popup
  *
- * @slot - Options (`<sl-option>`).
+ * @slot - Options (`<sl-option>`). Hidden while `searching` is true or when there are no options (see `empty` slot).
  * @slot label - The control's label.
  * @slot prefix - Icon or element before the field.
  * @slot suffix - Content after the field.
  * @slot clear-icon - Icon for the clear button.
  * @slot expand-icon - Expand/collapse icon.
  * @slot help-text - Help text.
+ * @slot searching - Shown inside the dropdown while the `searching` attribute/property is true (e.g. loading indicator). The default options slot is hidden while `searching` is true.
+ * @slot empty - Shown inside the dropdown when there are no `<sl-option>` items and `searching` is false. The default options slot stays hidden in that state.
  *
  * @event sl-change - Emitted when the value changes due to user action.
  * @event sl-clear - Emitted when the value is cleared.
@@ -41,7 +44,7 @@ import type SlOption from '../option/option.component.js';
  * @event sl-blur - Emitted when the control loses focus.
  */
 export default class SlSearchSelect extends ShoelaceElement implements ShoelaceFormControl {
-  static styles: CSSResultGroup = [componentStyles, formControlStyles, selectStyles];
+  static styles: CSSResultGroup = [componentStyles, formControlStyles, selectStyles, searchSelectStyles];
   static dependencies = {
     'sl-icon': SlIcon,
     'sl-popup': SlPopup
@@ -93,6 +96,7 @@ export default class SlSearchSelect extends ShoelaceElement implements ShoelaceF
   @property({ type: Boolean, reflect: true }) disabled = false;
   @property({ type: Boolean }) clearable = false;
   @property({ type: Boolean, reflect: true }) open = false;
+  @property({ type: Boolean, reflect: true }) searching = false;
   @property({ type: Boolean }) hoist = false;
   @property({ type: Boolean, reflect: true }) filled = false;
   @property({ type: Boolean, reflect: true }) pill = false;
@@ -181,6 +185,10 @@ export default class SlSearchSelect extends ShoelaceElement implements ShoelaceF
     const input = event.target as HTMLInputElement;
     const nextValue = input.value;
     const hadSelection = this.selectedOptions.length > 0;
+
+    if (!this.disabled && !this.open && nextValue.length > 0) {
+      void this.show();
+    }
 
     if (hadSelection) {
       this.valueHasChanged = true;
@@ -581,6 +589,8 @@ export default class SlSearchSelect extends ShoelaceElement implements ShoelaceF
     const hasHelpText = this.helpText ? true : !!hasHelpTextSlot;
     const hasClearIcon = this.clearable && !this.disabled && this.value.length > 0;
     const isPlaceholderVisible = Boolean(this.placeholder && !this.value);
+    const hasOptions = this.getAllOptions().length > 0;
+    const hideOptionsSlot = this.searching || !hasOptions;
 
     return html`
       <div
@@ -654,6 +664,7 @@ export default class SlSearchSelect extends ShoelaceElement implements ShoelaceF
                 aria-labelledby="label"
                 aria-disabled=${this.disabled ? 'true' : 'false'}
                 aria-describedby="help-text"
+                aria-busy=${this.searching ? 'true' : 'false'}
                 role="combobox"
                 tabindex="0"
                 @focus=${this.handleFocus}
@@ -708,9 +719,24 @@ export default class SlSearchSelect extends ShoelaceElement implements ShoelaceF
               class="select__listbox"
               tabindex="-1"
               @mouseup=${this.handleOptionClick}
-              @slotchange=${this.handleDefaultSlotChange}
             >
-              <slot></slot>
+              ${this.searching
+                ? html`
+                    <div part="searching" class="select__searching" role="status" aria-live="polite">
+                      <slot name="searching"></slot>
+                    </div>
+                  `
+                : ''}
+              ${!this.searching && !hasOptions
+                ? html`
+                    <div part="empty" class="select__empty" role="status">
+                      <slot name="empty"></slot>
+                    </div>
+                  `
+                : ''}
+              <div ?hidden=${hideOptionsSlot} aria-hidden=${hideOptionsSlot ? 'true' : 'false'}>
+                <slot @slotchange=${this.handleDefaultSlotChange}></slot>
+              </div>
             </div>
           </sl-popup>
         </div>
